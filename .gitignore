@@ -6,4 +6,5 @@ venv/
 .env
 vocab.db
 instance/
+.claude/
 .DS_Store
