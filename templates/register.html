@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}注册 · 生词本{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <h1 class="auth-title">注册</h1>
+  <p class="auth-sub">创建一个属于你的生词本账号</p>
+  <form method="post" class="form">
+    <label>
+      <span>用户名</span>
+      <input type="text" name="username" autocomplete="username" required autofocus>
+    </label>
+    <label>
+      <span>密码（至少 6 位）</span>
+      <input type="password" name="password" autocomplete="new-password" required>
+    </label>
+    <label>
+      <span>确认密码</span>
+      <input type="password" name="confirm" autocomplete="new-password" required>
+    </label>
+    <button type="submit" class="btn btn-primary btn-block">注册</button>
+  </form>
+  <p class="auth-switch">已有账号？<a href="{{ url_for('login') }}">去登录</a></p>
+</div>
+{% endblock %}

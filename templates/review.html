@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}复习 · 生词本{% endblock %}
+{% block content %}
+<div class="review-head">
+  <a href="{{ url_for('index') }}" class="btn btn-ghost">← 返回</a>
+  <div class="review-tabs">
+    <a href="{{ url_for('review', type='word') }}" class="tab {% if type == 'word' %}active{% endif %}">复习单词</a>
+    <a href="{{ url_for('review', type='phrase') }}" class="tab {% if type == 'phrase' %}active{% endif %}">复习短语</a>
+    <a href="{{ url_for('review', type='sentence') }}" class="tab {% if type == 'sentence' %}active{% endif %}">复习句子</a>
+  </div>
+  <span class="review-counter" id="counter">本次已复习 0 条</span>
+</div>
+
+<div class="review-stage" id="stage">
+  <!-- 由 app.js 渲染 -->
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% endblock %}

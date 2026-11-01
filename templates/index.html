@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}我的单词 · 生词本{% endblock %}
+{% block content %}
+<div class="stats">
+  <div class="stat"><span class="stat-num">{{ total }}</span><span class="stat-label">总单词</span></div>
+  <div class="stat"><span class="stat-num">{{ new_count }}</span><span class="stat-label">待学</span></div>
+  <div class="stat stat-cta">
+    <a href="{{ url_for('review', type='word') }}" class="btn btn-primary">▶ 复习单词</a>
+  </div>
+</div>
+
+<section class="card">
+  <h2 class="card-title">录入生词</h2>
+  <form method="post" action="{{ url_for('add_word') }}" class="form add-form">
+    <label>
+      <span>单词 *</span>
+      <input type="text" name="word" required placeholder="例如：serendipity">
+    </label>
+    <label>
+      <span>释义 *</span>
+      <input type="text" name="meaning" required placeholder="例如：意外发现美好事物的运气">
+    </label>
+    <label class="span-2">
+      <span>例句（可选，复习时会挖空考你）</span>
+      <textarea name="example" rows="2" placeholder="例如：A fortunate stroke of serendipity led to the discovery."></textarea>
+    </label>
+    <div class="span-2">
+      <button type="submit" class="btn btn-primary">添加</button>
+    </div>
+  </form>
+</section>
+
+<details class="card details">
+  <summary>批量导入单词（每行一条：单词 释义）</summary>
+  <form method="post" action="{{ url_for('bulk_add_words') }}" class="form">
+    <label>
+      <span>每行一条，用空格 / Tab / = / | 分隔单词和释义</span>
+      <textarea name="bulk" rows="6" required placeholder="serendipity 意外发现美好事物的运气&#10;resilient = 有韧性的、能复原的&#10;eloquent | 雄辩的、有说服力的"></textarea>
+    </label>
+    <button type="submit" class="btn btn-primary">批量导入</button>
+  </form>
+</details>
+
+<section class="card">
+  <h2 class="card-title">单词列表</h2>
+  {% if words %}
+  <table class="word-table">
+    <thead>
+      <tr><th>单词</th><th>释义</th><th>例句</th><th>熟练度</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for w in words %}
+      <tr>
+        <td class="word-cell">{{ w.word }}</td>
+        <td>{{ w.meaning }}</td>
+        <td class="example-cell">{{ w.example or "—" }}</td>
+        <td>
+          <span class="box-dots">{{ "●" * w.box }}{{ "○" * (5 - w.box) }}</span>
+        </td>
+        <td>
+          <form method="post" action="{{ url_for('delete_word', word_id=w.id) }}"
+                onsubmit="return confirm('确定删除「{{ w.word }}」吗？')">
+            <button type="submit" class="btn btn-ghost btn-sm">删除</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">还没有单词，先在上方录入一个吧。</p>
+  {% endif %}
+</section>
+{% endblock %}

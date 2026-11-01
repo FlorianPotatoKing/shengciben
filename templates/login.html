@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}登录 · 生词本{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <h1 class="auth-title">登录</h1>
+  <p class="auth-sub">继续你的背单词计划</p>
+  <form method="post" class="form">
+    <label>
+      <span>用户名</span>
+      <input type="text" name="username" autocomplete="username" required autofocus>
+    </label>
+    <label>
+      <span>密码</span>
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <button type="submit" class="btn btn-primary btn-block">登录</button>
+  </form>
+  <p class="auth-switch">还没有账号？<a href="{{ url_for('register') }}">注册一个</a></p>
+</div>
+{% endblock %}

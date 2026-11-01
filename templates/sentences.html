@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}句子 · 生词本{% endblock %}
+{% block content %}
+<div class="stats">
+  <div class="stat"><span class="stat-num">{{ categories|length }}</span><span class="stat-label">分类</span></div>
+  <div class="stat"><span class="stat-num">{{ total_sentences }}</span><span class="stat-label">句子</span></div>
+  <div class="stat stat-cta">
+    <a href="{{ url_for('review', type='sentence') }}" class="btn btn-primary">▶ 复习句子</a>
+  </div>
+</div>
+
+<section class="card">
+  <h2 class="card-title">新建分类</h2>
+  <form method="post" action="{{ url_for('add_category') }}" class="inline-form">
+    <input type="text" name="name" required placeholder="例如：并列句 / 复杂句 / 倒装句 / 强调句…">
+    <button type="submit" class="btn btn-primary">新建</button>
+  </form>
+  {% if not categories %}
+  <p class="empty">还没有分类，先建一个（比如「并列句」「复杂句」），就能往里面存句子了。</p>
+  {% endif %}
+</section>
+
+{% if categories %}
+<section class="card">
+  <h2 class="card-title">录入句子</h2>
+  <form method="post" action="{{ url_for('add_sentence') }}" class="form add-form">
+    <label>
+      <span>分类 *</span>
+      <select name="category_id" required>
+        {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="span-2">
+      <span>句子 *</span>
+      <textarea name="sentence" rows="2" required placeholder="粘贴你要收藏的英文句子"></textarea>
+    </label>
+    <label class="span-2">
+      <span>解释 / 翻译（可选，复习时会作为提示）</span>
+      <textarea name="explanation" rows="2" placeholder="中文翻译，或这句用了什么句式、好在哪"></textarea>
+    </label>
+    <div class="span-2">
+      <button type="submit" class="btn btn-primary">添加句子</button>
+    </div>
+  </form>
+</section>
+
+<details class="card details">
+  <summary>批量导入句子（每行一句，可用 | 分隔解释）</summary>
+  <form method="post" action="{{ url_for('bulk_add_sentences') }}" class="form">
+    <label>
+      <span>分类 *</span>
+      <select name="category_id" required>
+        {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>每行一句；想带解释就用「句子 | 解释」</span>
+      <textarea name="bulk" rows="6" required placeholder="I wanted to stay, but I had to go. | 我想留下，但不得不走&#10;He is not only smart but also hardworking. | 他不仅聪明，还很勤奋"></textarea>
+    </label>
+    <button type="submit" class="btn btn-primary">批量导入</button>
+  </form>
+</details>
+{% endif %}
+
+{% for c in categories %}
+<section class="card">
+  <div class="cat-head">
+    <h2 class="card-title">{{ c.name }} <span class="cat-count">{{ by_cat.get(c.id, [])|length }} 句</span></h2>
+    <div class="cat-actions">
+      <span class="cat-move">
+        <form method="post" action="{{ url_for('move_category', cid=c.id, direction='up') }}">
+          <button type="submit" class="btn btn-ghost btn-sm" title="上移">↑</button>
+        </form>
+        <form method="post" action="{{ url_for('move_category', cid=c.id, direction='down') }}">
+          <button type="submit" class="btn btn-ghost btn-sm" title="下移">↓</button>
+        </form>
+      </span>
+      <form method="post" action="{{ url_for('rename_category', cid=c.id) }}" class="inline-form">
+        <input type="text" name="name" value="{{ c.name }}" required>
+        <button type="submit" class="btn btn-ghost btn-sm">改名</button>
+      </form>
+      <form method="post" action="{{ url_for('delete_category', cid=c.id) }}"
+            onsubmit="return confirm('删除分类「{{ c.name }}」会同时删除其中所有句子，确定吗？')">
+        <button type="submit" class="btn btn-ghost btn-sm">删除分类</button>
+      </form>
+    </div>
+  </div>
+
+  {% set items = by_cat.get(c.id, []) %}
+  {% if items %}
+  <ul class="sentence-list">
+    {% for s in items %}
+    <li class="sentence-item">
+      <div class="sentence-top">
+        <div class="sentence-body">
+          <p class="sentence-text">{{ s.sentence }}</p>
+          {% if s.explanation %}<p class="sentence-expl">{{ s.explanation }}</p>{% endif %}
+        </div>
+        <div class="sentence-actions">
+          <button type="button" class="btn btn-ghost btn-sm edit-toggle">编辑</button>
+          <form method="post" action="{{ url_for('delete_sentence', sid=s.id) }}"
+                onsubmit="return confirm('删除这条句子？')">
+            <button type="submit" class="btn btn-ghost btn-sm">删除</button>
+          </form>
+        </div>
+      </div>
+
+      <form method="post" action="{{ url_for('edit_sentence', sid=s.id) }}" class="sentence-edit-form hidden">
+        <label>
+          <span>分类</span>
+          <select name="category_id">
+            {% for c2 in categories %}
+            <option value="{{ c2.id }}" {% if c2.id == s.category_id %}selected{% endif %}>{{ c2.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          <span>句子</span>
+          <textarea name="sentence" rows="2" required>{{ s.sentence }}</textarea>
+        </label>
+        <label>
+          <span>解释 / 翻译</span>
+          <textarea name="explanation" rows="2">{{ s.explanation or "" }}</textarea>
+        </label>
+        <div class="edit-actions">
+          <button type="submit" class="btn btn-primary btn-sm">保存</button>
+          <button type="button" class="btn btn-ghost btn-sm edit-cancel">取消</button>
+        </div>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">这个分类还没有句子。</p>
+  {% endif %}
+</section>
+{% endfor %}
+
+<script>
+document.querySelectorAll('.sentence-item').forEach(function (item) {
+  var toggle = item.querySelector('.edit-toggle');
+  var form = item.querySelector('.sentence-edit-form');
+  var cancel = item.querySelector('.edit-cancel');
+  if (!toggle || !form) return;
+  toggle.addEventListener('click', function () { form.classList.remove('hidden'); });
+  if (cancel) cancel.addEventListener('click', function () { form.classList.add('hidden'); });
+});
+</script>
+{% endblock %}
