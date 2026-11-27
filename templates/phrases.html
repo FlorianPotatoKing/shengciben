@@ -3,7 +3,7 @@
 {% block content %}
 <div class="stats">
   <div class="stat"><span class="stat-num">{{ total }}</span><span class="stat-label">总短语</span></div>
-  <div class="stat"><span class="stat-num">{{ new_count }}</span><span class="stat-label">待学</span></div>
+  <div class="stat"><span class="stat-num">{{ new_count }}</span><span class="stat-label">未学</span></div>
   <div class="stat stat-cta">
     <a href="{{ url_for('review', type='phrase') }}" class="btn btn-primary">▶ 复习短语</a>
   </div>
@@ -43,10 +43,11 @@
 
 <section class="card">
   <h2 class="card-title">短语列表</h2>
+  <p class="box-legend">熟练度：● 记牢的档位 · ○ 未掌握 · <span class="box-neg">●</span> 反复没记住</p>
   {% if phrases %}
   <table class="word-table">
     <thead>
-      <tr><th>短语</th><th>释义</th><th>例句</th><th>熟练度</th><th></th></tr>
+      <tr><th>短语</th><th>释义</th><th>例句</th><th>熟练度</th><th>操作</th></tr>
     </thead>
     <tbody>
       {% for p in phrases %}
@@ -55,13 +56,23 @@
         <td>{{ p.meaning }}</td>
         <td class="example-cell">{{ p.example or "—" }}</td>
         <td>
-          <span class="box-dots">{{ "●" * p.box }}{{ "○" * (5 - p.box) }}</span>
+          <span class="box-dots">{{ box_dots(p.box) | safe }}</span>
         </td>
         <td>
-          <form method="post" action="{{ url_for('delete_phrase', pid=p.id) }}"
-                onsubmit="return confirm('确定删除「{{ p.phrase }}」吗？')">
-            <button type="submit" class="btn btn-ghost btn-sm">删除</button>
-          </form>
+          <div class="row-actions">
+            <form method="post" action="{{ url_for('mark_phrase', pid=p.id) }}">
+              <input type="hidden" name="remembered" value="1">
+              <button type="submit" class="btn btn-remember btn-sm">记住</button>
+            </form>
+            <form method="post" action="{{ url_for('mark_phrase', pid=p.id) }}">
+              <input type="hidden" name="remembered" value="0">
+              <button type="submit" class="btn btn-forgot btn-sm">没记住</button>
+            </form>
+            <form method="post" action="{{ url_for('delete_phrase', pid=p.id) }}"
+                  onsubmit="return confirm('确定删除「{{ p.phrase }}」吗？')">
+              <button type="submit" class="btn btn-ghost btn-sm">删除</button>
+            </form>
+          </div>
         </td>
       </tr>
       {% endfor %}

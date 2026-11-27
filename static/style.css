@@ -147,6 +147,37 @@ a:hover { text-decoration: underline; }
 .auth-card .form { display: flex; flex-direction: column; gap: 16px; }
 .auth-switch { margin: 20px 0 0; text-align: center; font-size: 14px; color: var(--muted); }
 
+/* 单词列表排序 */
+.sort-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 16px;
+  width: fit-content;
+}
+.sort-label {
+  padding: 6px 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.sort-link {
+  padding: 6px 14px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.sort-link:hover { text-decoration: none; }
+.sort-link.active {
+  background: #fff;
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
 /* 单词表格 */
 .word-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .word-table th, .word-table td {
@@ -157,8 +188,11 @@ a:hover { text-decoration: underline; }
 }
 .word-table th { color: var(--muted); font-weight: 600; font-size: 13px; }
 .word-cell { font-weight: 600; white-space: nowrap; }
+.row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .example-cell { color: var(--muted); max-width: 300px; }
 .box-dots { letter-spacing: 2px; color: var(--primary); }
+.box-neg { color: var(--danger); }
+.box-legend { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
 .empty { color: var(--muted); text-align: center; padding: 20px 0; }
 
 /* 复习页 */

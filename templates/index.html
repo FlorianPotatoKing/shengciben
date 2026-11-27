@@ -3,7 +3,7 @@
 {% block content %}
 <div class="stats">
   <div class="stat"><span class="stat-num">{{ total }}</span><span class="stat-label">总单词</span></div>
-  <div class="stat"><span class="stat-num">{{ new_count }}</span><span class="stat-label">待学</span></div>
+  <div class="stat"><span class="stat-num">{{ new_count }}</span><span class="stat-label">未学</span></div>
   <div class="stat stat-cta">
     <a href="{{ url_for('review', type='word') }}" class="btn btn-primary">▶ 复习单词</a>
   </div>
@@ -43,10 +43,17 @@
 
 <section class="card">
   <h2 class="card-title">单词列表</h2>
+  <div class="sort-bar">
+    <span class="sort-label">排序</span>
+    <a href="{{ url_for('index', sort='time') }}" class="sort-link {{ 'active' if sort == 'time' }}">按录入时间</a>
+    <a href="{{ url_for('index', sort='alpha') }}" class="sort-link {{ 'active' if sort == 'alpha' }}">按字母</a>
+    <a href="{{ url_for('index', sort='box') }}" class="sort-link {{ 'active' if sort == 'box' }}">按熟练度</a>
+  </div>
+  <p class="box-legend">熟练度：● 记牢的档位 · ○ 未掌握 · <span class="box-neg">●</span> 反复没记住</p>
   {% if words %}
   <table class="word-table">
     <thead>
-      <tr><th>单词</th><th>释义</th><th>例句</th><th>熟练度</th><th></th></tr>
+      <tr><th>单词</th><th>释义</th><th>例句</th><th>熟练度</th><th>操作</th></tr>
     </thead>
     <tbody>
       {% for w in words %}
@@ -55,13 +62,25 @@
         <td>{{ w.meaning }}</td>
         <td class="example-cell">{{ w.example or "—" }}</td>
         <td>
-          <span class="box-dots">{{ "●" * w.box }}{{ "○" * (5 - w.box) }}</span>
+          <span class="box-dots">{{ box_dots(w.box) | safe }}</span>
         </td>
         <td>
-          <form method="post" action="{{ url_for('delete_word', word_id=w.id) }}"
-                onsubmit="return confirm('确定删除「{{ w.word }}」吗？')">
-            <button type="submit" class="btn btn-ghost btn-sm">删除</button>
-          </form>
+          <div class="row-actions">
+            <form method="post" action="{{ url_for('mark_word', word_id=w.id) }}">
+              <input type="hidden" name="remembered" value="1">
+              <input type="hidden" name="sort" value="{{ sort }}">
+              <button type="submit" class="btn btn-remember btn-sm">记住</button>
+            </form>
+            <form method="post" action="{{ url_for('mark_word', word_id=w.id) }}">
+              <input type="hidden" name="remembered" value="0">
+              <input type="hidden" name="sort" value="{{ sort }}">
+              <button type="submit" class="btn btn-forgot btn-sm">没记住</button>
+            </form>
+            <form method="post" action="{{ url_for('delete_word', word_id=w.id) }}"
+                  onsubmit="return confirm('确定删除「{{ w.word }}」吗？')">
+              <button type="submit" class="btn btn-ghost btn-sm">删除</button>
+            </form>
+          </div>
         </td>
       </tr>
       {% endfor %}

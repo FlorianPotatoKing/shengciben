@@ -37,6 +37,15 @@ app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
 MAX_BOX = 5  # 记忆熟练度最高档（Leitner 盒子数）
+MIN_BOX = -3  # 熟练度最低档（负数 = 反复没记住，用红点表示）
+
+# ---------------------------------------------------------------------------
+# 复习推荐权重：控制「新词 / 旧词」的出现频率。
+# 想调整的话直接改下面这几个数即可。
+# ---------------------------------------------------------------------------
+BOX_WEIGHT_BASE = 2        # 熟练度每升一档，出现概率减半：box0=32 … box5=1
+NEW_WORD_BOOST = 2.0       # 从未复习过的新词再翻倍，保证新词优先
+RECENT_COOLDOWN_MINUTES = 30  # 刚复习完这么多分钟内，几乎不再被抽到
 
 
 # ---------------------------------------------------------------------------
@@ -217,12 +226,26 @@ def index():
         "SELECT COUNT(*) AS n FROM words WHERE user_id = ?", (user_id,)
     ).fetchone()["n"]
     new_count = db.execute(
-        "SELECT COUNT(*) AS n FROM words WHERE user_id = ? AND box = 0", (user_id,)
+        "SELECT COUNT(*) AS n FROM words WHERE user_id = ? AND reviewed_at IS NULL",
+        (user_id,),
     ).fetchone()["n"]
+
+    # 排序方式来自白名单，杜绝 SQL 注入
+    sort_orders = {
+        "time": "id DESC",                      # 按录入时间（新的在前）
+        "alpha": "word COLLATE NOCASE ASC",     # 按字母（忽略大小写）
+        "box": "box ASC, id DESC",              # 按熟练度（待学在前）
+    }
+    sort = request.args.get("sort", "time")
+    if sort not in sort_orders:
+        sort = "time"
     words = db.execute(
-        "SELECT * FROM words WHERE user_id = ? ORDER BY id DESC", (user_id,)
+        f"SELECT * FROM words WHERE user_id = ? ORDER BY {sort_orders[sort]}",
+        (user_id,),
     ).fetchall()
-    return render_template("index.html", words=words, total=total, new_count=new_count)
+    return render_template(
+        "index.html", words=words, total=total, new_count=new_count, sort=sort
+    )
 
 
 @app.route("/words/add", methods=["POST"])
@@ -237,6 +260,14 @@ def add_word():
         return redirect(url_for("index"))
 
     db = get_db()
+    exists = db.execute(
+        "SELECT 1 FROM words WHERE user_id = ? AND LOWER(word) = LOWER(?)",
+        (session["user_id"], word),
+    ).fetchone()
+    if exists:
+        flash(f"「{word}」已存在，添加失败，请勿重复录入", "error")
+        return redirect(url_for("index"))
+
     db.execute(
         "INSERT INTO words (user_id, word, example, meaning) VALUES (?, ?, ?, ?)",
         (session["user_id"], word, example, meaning),
@@ -257,6 +288,16 @@ def delete_word(word_id):
     db.commit()
     flash("已删除", "success")
     return redirect(url_for("index"))
+
+
+@app.route("/words/<int:word_id>/mark", methods=["POST"])
+@login_required
+def mark_word(word_id):
+    remembered = request.form.get("remembered") == "1"
+    sort = request.form.get("sort", "time")
+    if sort not in {"time", "alpha", "box"}:
+        sort = "time"
+    return apply_mark("words", word_id, remembered, url_for("index", sort=sort))
 
 
 def parse_word_line(line):
@@ -285,19 +326,39 @@ def parse_word_line(line):
 def bulk_add_words():
     lines = [ln for ln in request.form.get("bulk", "").splitlines() if ln.strip()]
     db = get_db()
+    # 已存在的单词（统一转小写比对），跳过重复，避免和之前录的冲突
+    existing = {
+        r[0]
+        for r in db.execute(
+            "SELECT LOWER(word) FROM words WHERE user_id = ?",
+            (session["user_id"],),
+        ).fetchall()
+    }
     added = 0
+    skipped_words = []
     for ln in lines:
         parsed = parse_word_line(ln)
         if not parsed or not parsed[1]:
             continue
         word, meaning = parsed
+        if word.lower() in existing:
+            skipped_words.append(word)
+            continue
         db.execute(
             "INSERT INTO words (user_id, word, meaning) VALUES (?, ?, ?)",
             (session["user_id"], word, meaning),
         )
+        existing.add(word.lower())
         added += 1
     db.commit()
-    if added:
+    if skipped_words:
+        dupes = "、".join(skipped_words[:10])
+        more = f" 等 {len(skipped_words)} 个" if len(skipped_words) > 10 else ""
+        if added:
+            flash(f"有 {len(skipped_words)} 个重复单词未导入：{dupes}{more}（已导入 {added} 个）", "error")
+        else:
+            flash(f"这些单词都已存在，未导入：{dupes}{more}", "error")
+    elif added:
         flash(f"批量导入了 {added} 个单词", "success")
     else:
         flash("没有导入任何单词，请检查格式", "error")
@@ -316,7 +377,8 @@ def phrases():
         "SELECT COUNT(*) AS n FROM phrases WHERE user_id = ?", (uid,)
     ).fetchone()["n"]
     new_count = db.execute(
-        "SELECT COUNT(*) AS n FROM phrases WHERE user_id = ? AND box = 0", (uid,)
+        "SELECT COUNT(*) AS n FROM phrases WHERE user_id = ? AND reviewed_at IS NULL",
+        (uid,),
     ).fetchone()["n"]
     rows = db.execute(
         "SELECT * FROM phrases WHERE user_id = ? ORDER BY id DESC", (uid,)
@@ -358,6 +420,13 @@ def delete_phrase(pid):
     db.commit()
     flash("已删除", "success")
     return redirect(url_for("phrases"))
+
+
+@app.route("/phrases/<int:pid>/mark", methods=["POST"])
+@login_required
+def mark_phrase(pid):
+    remembered = request.form.get("remembered") == "1"
+    return apply_mark("phrases", pid, remembered, url_for("phrases"))
 
 
 @app.route("/phrases/bulk", methods=["POST"])
@@ -617,6 +686,81 @@ def blank_word(example, word):
     return pattern.sub("____", example)
 
 
+def review_weight(box, hours_since):
+    """计算某条内容在复习抽题中的权重。
+
+    hours_since < 0 表示从未复习过（新词）；否则为距上次复习的小时数。
+    规则：
+      - 熟练度越低（box 越小）权重越高，每升一档减半；
+      - 从未复习过的新词额外翻倍；
+      - 刚复习完不久（冷却期内）几乎不再出现，随间隔拉长逐渐恢复。
+    """
+    fam = BOX_WEIGHT_BASE ** (MAX_BOX - box)
+    if hours_since is None or hours_since < 0:
+        recency = NEW_WORD_BOOST
+    elif hours_since * 60 < RECENT_COOLDOWN_MINUTES:
+        recency = 0.0
+    elif hours_since < 6:
+        recency = 0.2
+    elif hours_since < 24:
+        recency = 0.5
+    elif hours_since < 72:
+        recency = 0.8
+    else:
+        recency = 1.0
+    return fam * recency
+
+
+def box_dots(box):
+    """把熟练度渲染成点串：负数（反复没记住）用红点，正数用主色实点，其余空点。"""
+    neg = max(0, -box)
+    pos = max(0, box)
+    empty = max(0, MAX_BOX - pos)
+    html = f'<span class="box-neg">{"●" * neg}</span>' if neg else ""
+    html += "●" * pos
+    html += "○" * empty
+    return html
+
+
+app.jinja_env.globals["box_dots"] = box_dots
+
+
+def apply_answer(db, table, row, remembered):
+    """把一次「记住/没记住」的结果写回 box / wrong_count / reviewed_at，返回新 box。
+
+    table 必须是白名单内的表名（由调用方保证）。"""
+    if remembered:
+        new_box = min(MAX_BOX, row["box"] + 1)
+        db.execute(
+            f"UPDATE {table} SET box = ?, reviewed_at = datetime('now') WHERE id = ?",
+            (new_box, row["id"]),
+        )
+    else:
+        new_box = max(MIN_BOX, row["box"] - 1)
+        db.execute(
+            f"UPDATE {table} SET box = ?, wrong_count = wrong_count + 1, "
+            "reviewed_at = datetime('now') WHERE id = ?",
+            (new_box, row["id"]),
+        )
+    return new_box
+
+
+def apply_mark(table, item_id, remembered, back):
+    """列表页里的「记住/没记住」快捷标记：找到条目、写回、跳转回去。"""
+    db = get_db()
+    row = db.execute(
+        f"SELECT * FROM {table} WHERE id = ? AND user_id = ?",
+        (item_id, session["user_id"]),
+    ).fetchone()
+    if row is None:
+        flash("内容不存在", "error")
+    else:
+        apply_answer(db, table, row, remembered)
+        db.commit()
+        flash("已标记「记住了」" if remembered else "已标记「没记住」", "success")
+    return redirect(back)
+
+
 @app.route("/review")
 @login_required
 def review():
@@ -633,27 +777,38 @@ def review_next():
 
     if kind == "sentence":
         rows = db.execute(
-            "SELECT s.id, s.sentence, s.explanation, s.box, c.name AS category "
+            "SELECT s.id, s.sentence, s.explanation, s.box, c.name AS category, "
+            "CASE WHEN s.reviewed_at IS NULL THEN -1 "
+            "ELSE (julianday('now') - julianday(s.reviewed_at)) * 24 END AS hours_since "
             "FROM sentences s JOIN categories c ON c.id = s.category_id "
             "WHERE s.user_id = ?",
             (uid,),
         ).fetchall()
     elif kind == "phrase":
         rows = db.execute(
-            "SELECT id, phrase AS word, example, meaning, box FROM phrases WHERE user_id = ?",
+            "SELECT id, phrase AS word, example, meaning, box, "
+            "CASE WHEN reviewed_at IS NULL THEN -1 "
+            "ELSE (julianday('now') - julianday(reviewed_at)) * 24 END AS hours_since "
+            "FROM phrases WHERE user_id = ?",
             (uid,),
         ).fetchall()
     else:
         rows = db.execute(
-            "SELECT id, word, example, meaning, box FROM words WHERE user_id = ?",
+            "SELECT id, word, example, meaning, box, "
+            "CASE WHEN reviewed_at IS NULL THEN -1 "
+            "ELSE (julianday('now') - julianday(reviewed_at)) * 24 END AS hours_since "
+            "FROM words WHERE user_id = ?",
             (uid,),
         ).fetchall()
 
     if not rows:
         return jsonify({"done": True, "type": kind})
 
-    # 熟练度越低（box 越小）越容易被抽到
-    weights = [max(1, MAX_BOX + 1 - r["box"]) for r in rows]
+    # 按「熟练度 + 距上次复习时长」加权抽题：新词优先、旧词少出现、刚复习过的冷却
+    weights = [review_weight(r["box"], r["hours_since"]) for r in rows]
+    if sum(weights) <= 0:
+        # 全部都在冷却期内时，退化为等概率，避免无题可抽
+        weights = [1.0] * len(rows)
     card = random.choices(rows, weights=weights, k=1)[0]
 
     if kind == "sentence":
@@ -702,19 +857,7 @@ def review_answer():
     if row is None:
         return jsonify({"ok": False, "error": "内容不存在"}), 404
 
-    if remembered:
-        new_box = min(MAX_BOX, row["box"] + 1)
-        db.execute(
-            f"UPDATE {table} SET box = ?, reviewed_at = datetime('now') WHERE id = ?",
-            (new_box, item_id),
-        )
-    else:
-        new_box = max(0, row["box"] - 1)
-        db.execute(
-            f"UPDATE {table} SET box = ?, wrong_count = wrong_count + 1, "
-            "reviewed_at = datetime('now') WHERE id = ?",
-            (new_box, item_id),
-        )
+    new_box = apply_answer(db, table, row, remembered)
     db.commit()
 
     return jsonify({"ok": True, "box": new_box})
