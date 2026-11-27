@@ -52,13 +52,13 @@
     <tbody>
       {% for p in phrases %}
       <tr>
-        <td class="word-cell">{{ p.phrase }}</td>
-        <td>{{ p.meaning }}</td>
-        <td class="example-cell">{{ p.example or "—" }}</td>
-        <td>
+        <td class="word-cell" data-label="短语">{{ p.phrase }}</td>
+        <td data-label="释义">{{ p.meaning }}</td>
+        <td class="example-cell" data-label="例句">{{ p.example or "—" }}</td>
+        <td data-label="熟练度">
           <span class="box-dots">{{ box_dots(p.box) | safe }}</span>
         </td>
-        <td>
+        <td data-label="操作">
           <div class="row-actions">
             <form method="post" action="{{ url_for('mark_phrase', pid=p.id) }}">
               <input type="hidden" name="remembered" value="1">

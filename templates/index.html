@@ -58,13 +58,13 @@
     <tbody>
       {% for w in words %}
       <tr>
-        <td class="word-cell">{{ w.word }}</td>
-        <td>{{ w.meaning }}</td>
-        <td class="example-cell">{{ w.example or "—" }}</td>
-        <td>
+        <td class="word-cell" data-label="单词">{{ w.word }}</td>
+        <td data-label="释义">{{ w.meaning }}</td>
+        <td class="example-cell" data-label="例句">{{ w.example or "—" }}</td>
+        <td data-label="熟练度">
           <span class="box-dots">{{ box_dots(w.box) | safe }}</span>
         </td>
-        <td>
+        <td data-label="操作">
           <div class="row-actions">
             <form method="post" action="{{ url_for('mark_word', word_id=w.id) }}">
               <input type="hidden" name="remembered" value="1">

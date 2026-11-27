@@ -335,3 +335,44 @@ select {
   .review-tabs { order: 3; width: 100%; justify-content: center; }
   .review-counter { order: 2; margin-left: auto; }
 }
+
+/* 手机端：导航换行 + 单词/短语表格变卡片 */
+@media (max-width: 640px) {
+  .container { padding: 16px 14px 48px; }
+
+  .nav-inner { flex-wrap: wrap; gap: 6px 12px; padding: 10px 14px; }
+  .brand { font-size: 16px; }
+  .nav-links { width: 100%; margin-left: 0; gap: 6px 14px; flex-wrap: wrap; font-size: 13px; }
+
+  .word-table thead { display: none; }
+  .word-table, .word-table tbody, .word-table tr, .word-table td {
+    display: block;
+    width: 100%;
+  }
+  .word-table tr {
+    padding: 14px 2px;
+    border-bottom: 1px solid var(--border);
+  }
+  .word-table tr:last-child { border-bottom: none; }
+  .word-table td {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 6px 0;
+    border-bottom: none;
+    text-align: left;
+  }
+  .word-table td::before {
+    content: attr(data-label);
+    flex: 0 0 68px;
+    color: var(--muted);
+    font-size: 13px;
+    padding-top: 1px;
+  }
+  .word-cell { white-space: normal; font-size: 17px; overflow-wrap: anywhere; }
+  .example-cell { max-width: none; }
+
+  .review-card { padding: 28px 20px; }
+  .review-actions { flex-wrap: wrap; }
+  .review-word { overflow-wrap: anywhere; }
+}
